@@ -21,8 +21,7 @@ class Layer:
     w = None
     b = None
     a = None
-
-    #activatio function
+    #activation function
     activation = None
     shape = None
     previous_layer = None
@@ -130,8 +129,9 @@ class Model:
                     cost_value += (self.output.a - y_train[i])**2/2
                     e = (self.output.a - y_train[i])
                 elif self.loss == 'CrossEntropy':
-                    cost_value -= sum(y_train[i] * np.log(self.output.a))
-                    e = -(y_train[i]/self.output.a)
+                    result = np.maximum(self.output.a, 0.0000000001)
+                    cost_value -= sum(y_train[i] * np.log(result))
+                    e = -(y_train[i]/result)
                 elif self.loss == 'BinaryCrossEntropy':
                     cost_value -= sum(y_train[i] * np.log(self.output.a) + (1 - y_train[i]) * np.log(1 - self.output.a))
                     e = -((y_train[i]/self.output.a) - (1 - y_train[i])/(1 - self.output.a))
