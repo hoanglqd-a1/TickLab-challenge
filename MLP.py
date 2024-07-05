@@ -122,31 +122,34 @@ class Model:
                 self.input.load_input(x_train[i])
                 self.input.feed_forward()
                 e = None
+                y_hat = self.output.a
+                y = y_train[i]
                 if self.loss == 'MAE':
-                    cost_value += np.abs(self.output.a - y_train[i])
-                    e = np.where(self.output.a - y_train[i] >= 0, 1, -1)
+                    cost_value += np.abs(y_hat - y)
+                    e = np.where(y_hat - y >= 0, 1, -1)
                 elif self.loss == 'MSE':
-                    cost_value += (self.output.a - y_train[i])**2/2
-                    e = (self.output.a - y_train[i])
+                    cost_value += (y_hat - y)**2/2
+                    e = (y_hat - y)
                 elif self.loss == 'CrossEntropy':
-                    result = np.maximum(self.output.a, 0.0000000001)
-                    cost_value -= sum(y_train[i] * np.log(result))
-                    e = -(y_train[i]/result)
+                    y_hat = np.maximum(y_hat, 0.0000000001)
+                    cost_value -= sum(y * np.log(y_hat))
+                    e = -(y/y_hat)
                 elif self.loss == 'BinaryCrossEntropy':
-                    cost_value -= sum(y_train[i] * np.log(self.output.a) + (1 - y_train[i]) * np.log(1 - self.output.a))
-                    e = -((y_train[i]/self.output.a) - (1 - y_train[i])/(1 - self.output.a))
+                    cost_value -= sum(y * np.log(y_hat) + (1 - y) * np.log(1 - y_hat))
+                    e = -((y/y_hat) - (1 - y)/(1 - y_hat))
         
                 self.output.back_propagation(e/n_samples, self.learning_rate)
             print(f"epoch {epoch}: {cost_value/n_samples}")
             self.output.update_parameter()
 
-    def predict(self, X_test):
+    def predict(self, X_test):  
         y_hat = np.zeros(shape=[X_test.shape, self.output.shape])
         for i in range(X_test.shape[0]):
             self.input.load_input(X_test[i])
             self.input.feed_forward()
             y_hat[i] = self.output.a
         return y_hat
+    
 """
 def main():
     x_train = np.array([1,2,3,4,5,6,7,8,9,10]).reshape(1, 10)
