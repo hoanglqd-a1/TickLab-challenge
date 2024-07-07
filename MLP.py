@@ -1,5 +1,50 @@
 import numpy as np
 
+class Loss:
+    class MAE:
+        def loss(self, y_hat, y):
+            return np.abs(y_hat - y)
+        def derivative(self, y_hat, y):
+            return np.where(y_hat - y >= 0, 1, -1)
+        def cost(self, y_hat, y):
+            return np.sum(np.abs(y_hat - y))/y.shape[0]
+        def evalute(self, y_hat, y):
+            print('Cost:', self.cost(y_hat, y))
+    class MSE:
+        def loss(self, y_hat, y):
+            return (y_hat - y)**2/2*y
+        def derivative(self, y_hat, y):
+            return (y_hat - y)
+        def cost(self, y_hat, y):
+            return np.sum((y_hat - y)**2)/(2*y.shape[0])
+        def evaluate(self, y_hat, y):
+            print('Cost:', self.cost(y_hat, y))
+    class CrossEntropy:
+        def loss(self, y_hat, y):
+            return -np.sum(y * np.log(y_hat))
+        def derivative(self, y_hat, y):
+            return -(y/y_hat)
+        def cost(self, y_hat, y):
+            return -np.sum(y*np.log(y_hat))
+        def accuracy(self, y_hat, y):
+            return np.sum(np.argmax(y_hat, axis=1) == np.argmax(y, axis=1))/y.shape[0]
+        def evaluate(self, y_hat, y):
+            print('Cost:', self.cost(y_hat, y), 'Accuracy:', self.accuracy(y_hat, y))
+    class BinaryCrossEntropy:
+        def loss(self, y_hat, y):
+            return -np.sum(y * np.log(y_hat) + (1 - y) * np.log(1 - y_hat))
+        def derivative(self, y_hat, y):
+            return -((y/y_hat) - (1 - y)/(1 - y_hat))
+        def cost(self, y_hat, y):
+            return -np.sum(y * np.log(y_hat) + (1 - y) * np.log(1 - y_hat))
+        def accuracy(self, y_hat, y):
+            return np.sum(y_hat == y)/y.shape[0]
+        def evaluate(self, y_hat, y):
+            print('Cost:', self.cost(y_hat, y), 'Accuracy:', self.accuracy(y_hat, y))
+        
+#Input Layer
+import numpy as np
+
 #Input Layer
 class Input:
     a = None
@@ -49,11 +94,12 @@ class Layer:
         elif self.activation == 'softmax':
             z = self.z - np.max(self.z)
             self.a = np.exp(z)/np.sum(np.exp(z))
+            self.a = np.maximum(self.a, 1e-6)
         elif self.activation == 'linear':
             self.a = self.z
-        else: 
+        else:
             raise ValueError('Invalid activation function')
-        
+
     #compute derivative of activation function
     def derivative_of_activation(self):
         derivative = None
@@ -69,7 +115,7 @@ class Layer:
             derivative = np.ones(shape=self.shape)
         else:
             raise ValueError('Invalid activation function')
-        
+
         return derivative
     def feed_forward(self):
         self.z = np.dot(self.w, self.previous_layer.a) + self.b
@@ -82,8 +128,8 @@ class Layer:
             e = np.dot(derivative, e)
         else:
             e = e * derivative
-        self.derivative_w = self.derivative_w + learning_rate * np.outer(e, self.previous_layer.a)
-        self.derivative_b = self.derivative_b + learning_rate * e
+        self.derivative_w += learning_rate * np.outer(e, self.previous_layer.a)
+        self.derivative_b += learning_rate * e
         e = np.dot(self.w.transpose(), e)
 
         #previous layer call back propagation
@@ -112,7 +158,7 @@ class Model:
     def compile(self, loss, learning_rate):
         self.loss = loss
         self.learning_rate = learning_rate
-    
+
     #train the model
     def fit(self, x_train, y_train, epochs):
         n_samples = x_train.shape[0]
@@ -124,33 +170,55 @@ class Model:
                 e = None
                 y_hat = self.output.a
                 y = y_train[i]
-                if self.loss == 'MAE':
-                    cost_value += np.abs(y_hat - y)
-                    e = np.where(y_hat - y >= 0, 1, -1)
-                elif self.loss == 'MSE':
-                    cost_value += (y_hat - y)**2/2
-                    e = (y_hat - y)
-                elif self.loss == 'CrossEntropy':
-                    y_hat = np.maximum(y_hat, 0.0000000001)
-                    cost_value -= sum(y * np.log(y_hat))
-                    e = -(y/y_hat)
-                elif self.loss == 'BinaryCrossEntropy':
-                    cost_value -= sum(y * np.log(y_hat) + (1 - y) * np.log(1 - y_hat))
-                    e = -((y/y_hat) - (1 - y)/(1 - y_hat))
-        
-                self.output.back_propagation(e/n_samples, self.learning_rate)
-            print(f"epoch {epoch}: {cost_value/n_samples}")
+                cost_value = self.loss.loss(y_hat, y)/n_samples
+                e = self.loss.derivative(y_hat, y)/n_samples
+                
+                self.output.back_propagation(e, self.learning_rate)
+            print(f"epoch {epoch}: {cost_value}")
             self.output.update_parameter()
 
-    def predict(self, X_test):  
-        y_hat = np.zeros(shape=[X_test.shape, self.output.shape])
+    def SGD_fit(self, x_train, y_train, batch_size, epochs):
+        n_samples = x_train.shape[0]
+        for epoch in range(epochs):
+            cost = 0.0
+            batch = np.random.choice(n_samples, size=batch_size, replace=False)
+            x_batch = x_train[batch]
+            y_batch = y_train[batch]
+            for i in range (batch_size):
+                self.input.load_input(x_batch[i])
+                self.input.feed_forward()
+                e = None
+                y_hat = self.output.a
+                y = y_batch[i]
+                print(y_hat, y)
+                cost += self.loss.loss(y_hat, y)/batch_size
+                e = self.loss.derivative(y_hat, y)/batch_size
+                self.output.back_propagation(e, self.learning_rate)
+
+            s = 'epoch:' + str(epoch) + ', cost:' + str(self.loss.cost(x_train, y_train))
+            if type(self.loss).__name__ == type(Loss.CrossEntropy()).__name__:
+                s += ', accuracy:' + str(self.loss.accuracy(x_train, y_train))
+
+            print(s)
+            self.output.update_parameter()
+
+    def predict(self, X_test):
+        y_hat = np.zeros(shape=[X_test.shape[0], self.output.shape])
         for i in range(X_test.shape[0]):
             self.input.load_input(X_test[i])
             self.input.feed_forward()
             y_hat[i] = self.output.a
         return y_hat
+    def evaluate(self, X_test, Y_test):
+        y_hat = self.predict(X_test)
+        self.loss.evaluate(y_hat, Y_test)
+
+def processing(Y, n):
+    y = np.zeros((Y.shape[0], n))
+    for i in range(Y.shape[0]):
+        y[i, int(Y[i])] = 1
+    return y
     
-"""
 def main():
     x_train = np.array([1,2,3,4,5,6,7,8,9,10]).reshape(1, 10)
     y_train = np.array([[1, 0, 0]])
@@ -159,9 +227,8 @@ def main():
     layer2 = Layer(shape=6, activation='ReLU', previous_layer=layer1)
     outputs = Layer(shape=3, activation='softmax', previous_layer=layer2)
     model = Model(input=inputs, output=outputs)
-    model.compile(loss='CrossEntropy', learning_rate=0.0001)
+    model.compile(loss=Loss.CrossEntropy(), learning_rate=0.0001)
     model.fit(x_train=x_train, y_train=y_train, epochs=30)
 
 if __name__ == '__main__':
     main()
-"""
