@@ -41,9 +41,6 @@ class Loss:
             return np.sum(y_hat == y)/y.shape[0]
         def evaluate(self, y_hat, y):
             print('Cost:', self.cost(y_hat, y), 'Accuracy:', self.accuracy(y_hat, y))
-        
-#Input Layer
-import numpy as np
 
 #Input Layer
 class Input:
@@ -195,9 +192,10 @@ class Model:
                 e = self.loss.derivative(y_hat, y)/batch_size
                 self.output.back_propagation(e, self.learning_rate)
 
-            s = 'epoch:' + str(epoch) + ', cost:' + str(self.loss.cost(x_train, y_train))
+            y_hat = self.predict(x_train)
+            s = 'epoch:' + str(epoch) + ', cost:' + str(self.loss.cost(y_hat, y_train))
             if type(self.loss).__name__ == type(Loss.CrossEntropy()).__name__:
-                s += ', accuracy:' + str(self.loss.accuracy(x_train, y_train))
+                s += ', accuracy:' + str(self.loss.accuracy(y_hat, y_train))
 
             print(s)
             self.output.update_parameter()
@@ -209,6 +207,7 @@ class Model:
             self.input.feed_forward()
             y_hat[i] = self.output.a
         return y_hat
+    
     def evaluate(self, X_test, Y_test):
         y_hat = self.predict(X_test)
         self.loss.evaluate(y_hat, Y_test)
@@ -220,15 +219,15 @@ def processing(Y, n):
     return y
     
 def main():
-    x_train = np.array([1,2,3,4,5,6,7,8,9,10]).reshape(1, 10)
+    x_train = np.array([[1,2,3,4,5,6,7,8,9,10]])
     y_train = np.array([[1, 0, 0]])
     inputs = Input(shape=10)
     layer1 = Layer(shape=8, activation='ReLU', previous_layer=inputs)
     layer2 = Layer(shape=6, activation='ReLU', previous_layer=layer1)
     outputs = Layer(shape=3, activation='softmax', previous_layer=layer2)
     model = Model(input=inputs, output=outputs)
-    model.compile(loss=Loss.CrossEntropy(), learning_rate=0.0001)
-    model.fit(x_train=x_train, y_train=y_train, epochs=30)
+    model.compile(loss=Loss.CrossEntropy(), learning_rate=0.001)
+    model.SGD_fit(x_train=x_train, y_train=y_train, batch_size=1, epochs=30)
 
 if __name__ == '__main__':
     main()
