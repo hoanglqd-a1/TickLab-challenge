@@ -157,47 +157,38 @@ class Model:
         self.learning_rate = learning_rate
 
     #train the model
-    def fit(self, x_train, y_train, epochs):
+    def fit(self, x_train, y_train, batch_size=None, epochs=10):
         n_samples = x_train.shape[0]
-        for epoch in range(epochs):
-            cost_value = 0.0
-            for i in range (n_samples):
-                self.input.load_input(x_train[i])
-                self.input.feed_forward()
-                e = None
-                y_hat = self.output.a
-                y = y_train[i]
-                cost_value = self.loss.loss(y_hat, y)/n_samples
-                e = self.loss.derivative(y_hat, y)/n_samples
-                
-                self.output.back_propagation(e, self.learning_rate)
-            print(f"epoch {epoch}: {cost_value}")
-            self.output.update_parameter()
+        if batch_size == None:
+            batch_size = n_samples
 
-    def SGD_fit(self, x_train, y_train, batch_size, epochs):
-        n_samples = x_train.shape[0]
-        for epoch in range(epochs):
+        n_batches = np.ceil(n_samples/batch_size)
+        for epoch in range(1, epochs+1):
             cost = 0.0
-            batch = np.random.choice(n_samples, size=batch_size, replace=False)
-            x_batch = x_train[batch]
-            y_batch = y_train[batch]
-            for i in range (batch_size):
+            batch = int(epoch % n_batches)
+            head = batch * batch_size
+            tail = min((batch+1) * batch_size, n_samples)
+            
+            x_batch = x_train[head:tail]
+            y_batch = y_train[head:tail]
+
+            for i in range (tail-head):
                 self.input.load_input(x_batch[i])
                 self.input.feed_forward()
-                e = None
                 y_hat = self.output.a
                 y = y_batch[i]
-                print(y_hat, y)
                 cost += self.loss.loss(y_hat, y)/batch_size
                 e = self.loss.derivative(y_hat, y)/batch_size
                 self.output.back_propagation(e, self.learning_rate)
 
-            y_hat = self.predict(x_train)
-            s = 'epoch:' + str(epoch) + ', cost:' + str(self.loss.cost(y_hat, y_train))
-            if type(self.loss).__name__ == type(Loss.CrossEntropy()).__name__:
-                s += ', accuracy:' + str(self.loss.accuracy(y_hat, y_train))
+            if epoch % 50 == 0:
+                y_hat = self.predict(x_train)
+                s = 'epoch:' + str(epoch) + ', cost:' + str(self.loss.cost(y_hat, y_train))
+                if type(self.loss).__name__ == type(Loss.CrossEntropy()).__name__:
+                    s += ', accuracy:' + str(self.loss.accuracy(y_hat, y_train))
 
-            print(s)
+                print(s)
+            
             self.output.update_parameter()
 
     def predict(self, X_test):
@@ -218,7 +209,7 @@ def processing(Y, n):
         y[i, int(Y[i])] = 1
     return y
     
-def main():
+"""def main():
     x_train = np.array([[1,2,3,4,5,6,7,8,9,10]])
     y_train = np.array([[1, 0, 0]])
     inputs = Input(shape=10)
@@ -227,7 +218,7 @@ def main():
     outputs = Layer(shape=3, activation='softmax', previous_layer=layer2)
     model = Model(input=inputs, output=outputs)
     model.compile(loss=Loss.CrossEntropy(), learning_rate=0.001)
-    model.SGD_fit(x_train=x_train, y_train=y_train, batch_size=1, epochs=30)
+    model.fit(x_train=x_train, y_train=y_train, batch_size=1, epochs=30)
 
 if __name__ == '__main__':
-    main()
+    main()"""
