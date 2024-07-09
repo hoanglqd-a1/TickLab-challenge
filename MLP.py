@@ -12,7 +12,7 @@ class Loss:
             print('Cost:', self.cost(y_hat, y))
     class MSE:
         def loss(self, y_hat, y):
-            return (y_hat - y)**2/2*y
+            return ((y_hat - y)**2)/2
         def derivative(self, y_hat, y):
             return (y_hat - y)
         def cost(self, y_hat, y):
@@ -89,8 +89,10 @@ class Layer:
         elif self.activation == 'tanh':
             self.a = np.tanh(self.z)
         elif self.activation == 'softmax':
-            z = self.z - np.max(self.z)
-            self.a = np.exp(z)/np.sum(np.exp(z))
+            if self.z.ndim == 1:
+                self.z = np.array([self.z])
+            z = (self.z.T - np.max(self.z, axis=1)).T
+            self.a = (np.exp(z).T / np.sum(np.exp(z), axis=1)).T
             self.a = np.maximum(self.a, 1e-6)
         elif self.activation == 'linear':
             self.a = self.z
@@ -107,7 +109,9 @@ class Layer:
         elif self.activation == 'tanh':
             derivative = 1 - self.a**2
         elif self.activation == 'softmax':
-            derivative = np.diagflat(self.a) - np.outer(self.a, self.a)
+            derivative = np.zeros(shape=([self.a.shape[0], self.a.shape[1], self.a.shape[1]]))
+            for i in range(self.a.shape[0]):
+                derivative[i] = np.diagflat(self.a[i]) - np.outer(self.a[i], self.a[i])
         elif self.activation == 'linear':
             derivative = np.ones(shape=self.shape)
         else:
@@ -115,21 +119,36 @@ class Layer:
 
         return derivative
     def feed_forward(self):
-        self.z = np.dot(self.w, self.previous_layer.a) + self.b
+        self.z = np.dot(self.w, self.previous_layer.a.T).T
+        self.z = self.z + self.b
         self.activate()
         if self.next_layer != None:
             self.next_layer.feed_forward()
     def back_propagation(self, e, learning_rate):
         derivative = self.derivative_of_activation()
         if self.activation == 'softmax':
-            e = np.dot(derivative, e)
+            try:
+                for i in range(e.shape[0]):
+                    e[i] = np.dot(derivative[i], e[i])
+            except:
+                print('error')
         else:
             e = e * derivative
-        self.derivative_w += learning_rate * np.outer(e, self.previous_layer.a)
-        self.derivative_b += learning_rate * e
-        e = np.dot(self.w.transpose(), e)
+        self.derivative_w = np.zeros(shape=[e.shape[0], self.w.shape[0], self.w.shape[1]])
+        for i in range(e.shape[0]):
+            self.derivative_w[i] = learning_rate * np.outer(e[i], self.previous_layer.a[i])
+        self.derivative_w = np.sum(self.derivative_w, axis=0)
+
+        self.derivative_b = learning_rate * e
+        self.derivative_b = np.sum(self.derivative_b, axis=0)
+
+        #next layer call back propagation
+        a = np.zeros(shape=[e.shape[0], self.previous_layer.shape])
+        for i in range(e.shape[0]):
+            a[i] = np.dot(self.w.T, e[i])
 
         #previous layer call back propagation
+        e = a
         self.previous_layer.back_propagation(e, learning_rate)
     def update_parameter(self):
         #update W and b
@@ -172,14 +191,13 @@ class Model:
             x_batch = x_train[head:tail]
             y_batch = y_train[head:tail]
 
-            for i in range (tail-head):
-                self.input.load_input(x_batch[i])
-                self.input.feed_forward()
-                y_hat = self.output.a
-                y = y_batch[i]
-                cost += self.loss.loss(y_hat, y)/batch_size
-                e = self.loss.derivative(y_hat, y)/batch_size
-                self.output.back_propagation(e, self.learning_rate)
+            self.input.load_input(x_batch)
+            self.input.feed_forward()
+            y_hat = self.output.a
+            y = y_batch
+            cost += self.loss.loss(y_hat, y)
+            e = self.loss.derivative(y_hat, y)/batch_size
+            self.output.back_propagation(e, self.learning_rate)
 
             if epoch % 50 == 0:
                 y_hat = self.predict(x_train)
@@ -192,11 +210,9 @@ class Model:
             self.output.update_parameter()
 
     def predict(self, X_test):
-        y_hat = np.zeros(shape=[X_test.shape[0], self.output.shape])
-        for i in range(X_test.shape[0]):
-            self.input.load_input(X_test[i])
-            self.input.feed_forward()
-            y_hat[i] = self.output.a
+        self.input.load_input(X_test)
+        self.input.feed_forward()
+        y_hat = self.output.a
         return y_hat
     
     def evaluate(self, X_test, Y_test):
@@ -209,7 +225,7 @@ def processing(Y, n):
         y[i, int(Y[i])] = 1
     return y
     
-"""def main():
+def main():
     x_train = np.array([[1,2,3,4,5,6,7,8,9,10]])
     y_train = np.array([[1, 0, 0]])
     inputs = Input(shape=10)
@@ -218,7 +234,7 @@ def processing(Y, n):
     outputs = Layer(shape=3, activation='softmax', previous_layer=layer2)
     model = Model(input=inputs, output=outputs)
     model.compile(loss=Loss.CrossEntropy(), learning_rate=0.001)
-    model.fit(x_train=x_train, y_train=y_train, batch_size=1, epochs=30)
+    model.fit(x_train=x_train, y_train=y_train, batch_size=1, epochs=100)
 
 if __name__ == '__main__':
-    main()"""
+    main()
