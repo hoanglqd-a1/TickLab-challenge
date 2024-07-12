@@ -11,8 +11,6 @@ class Loss:
             return np.where(y_hat - y >= 0, 1, -1)
         def cost(self, y_hat, y):
             return np.sum(np.abs(y_hat - y))/y.shape[0]
-        def evalute(self, y_hat, y):
-            print('Cost:', self.cost(y_hat, y))
     class MSE:
         def loss(self, y_hat, y):
             return ((y_hat - y)**2)/2
@@ -20,8 +18,6 @@ class Loss:
             return (y_hat - y)
         def cost(self, y_hat, y):
             return np.sum((y_hat - y)**2)/(2*y.shape[0])
-        def evaluate(self, y_hat, y):
-            print('Cost:', self.cost(y_hat, y))
     class CrossEntropy:
         def loss(self, y_hat, y):
             return -np.sum(y * np.log(y_hat))
@@ -31,8 +27,6 @@ class Loss:
             return -np.sum(y*np.log(y_hat))/y.shape[0]
         def accuracy(self, y_hat, y):
             return np.sum(np.argmax(y_hat, axis=1) == np.argmax(y, axis=1))/y.shape[0]
-        def evaluate(self, y_hat, y):
-            print('Cost:', self.cost(y_hat, y), 'Accuracy:', self.accuracy(y_hat, y))
     class BinaryCrossEntropy:
         def loss(self, y_hat, y):
             return -np.sum(y * np.log(y_hat) + (1 - y) * np.log(1 - y_hat))
@@ -42,8 +36,6 @@ class Loss:
             return -np.sum(y * np.log(y_hat) + (1 - y) * np.log(1 - y_hat))
         def accuracy(self, y_hat, y):
             return np.sum(y_hat == y)/y.shape[0]
-        def evaluate(self, y_hat, y):
-            print('Cost:', self.cost(y_hat, y), 'Accuracy:', self.accuracy(y_hat, y))
 
 #Input Layer
 class Input:
@@ -190,19 +182,15 @@ class Model:
         self.learning_rate = learning_rate
 
     #train the model
-    def fit(self, x_train, y_train, batch_size=None, epochs=10):
+    def fit(self, x_train, y_train, batch_size=None, iters=10):
         n_samples = x_train.shape[0]
         if batch_size == None:
             batch_size = n_samples
 
-        n_batches = np.ceil(n_samples/batch_size)
-        for epoch in range(epochs):
-            cost = 0.0
-            batch = int(epoch % n_batches)
-            head = batch * batch_size
-            tail = min((batch+1) * batch_size, n_samples)
-            x_batch = x_train[head:tail]
-            y_batch = y_train[head:tail]
+        for iter in range(iters):
+            indices = np.random.permutation(np.arange(n_samples))[:batch_size]
+            x_batch = x_train[indices]
+            y_batch = y_train[indices]
 
             self.input.load_input(x_batch)
             self.input.feed_forward()
@@ -211,9 +199,9 @@ class Model:
             e = self.loss.derivative(y_hat, y)/batch_size
             self.output.back_propagation(e, self.learning_rate)
 
-            if (epoch + 1)% 50 == 0:
+            if (iter + 1)% 50 == 0:
                 y_hat = self.predict(x_train)
-                s = 'epoch:' + str(epoch+1) + ', cost:' + str(self.loss.cost(y_hat, y_train))
+                s = 'iter:' + str(iter+1) + ', cost:' + str(self.loss.cost(y_hat, y_train))
                 if type(self.loss).__name__ == type(Loss.CrossEntropy()).__name__:
                     s += ', accuracy:' + str(self.loss.accuracy(y_hat, y_train))
 
