@@ -4,21 +4,25 @@ import os
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 
 class Loss:
-    class MAE:
+    class Mean_Absolute_Error:
         def loss(self, y_hat, y):
             return np.abs(y_hat - y)
         def derivative(self, y_hat, y):
             return np.where(y_hat - y >= 0, 1, -1)
         def cost(self, y_hat, y):
             return np.sum(np.abs(y_hat - y))/y.shape[0]
-    class MSE:
+        def evaluation(self, y_hat, y):
+            return f"Cost: {self.cost(y_hat, y)}"
+    class Mean_Squared_Error:
         def loss(self, y_hat, y):
             return ((y_hat - y)**2)/2
         def derivative(self, y_hat, y):
             return (y_hat - y)
         def cost(self, y_hat, y):
             return np.sum((y_hat - y)**2)/(2*y.shape[0])
-    class CrossEntropy:
+        def evaluation(self, y_hat, y):
+            return f"Cost: {self.cost(y_hat, y)}"
+    class Cross_Entropy:
         def loss(self, y_hat, y):
             return -np.sum(y * np.log(y_hat))
         def derivative(self, y_hat, y):
@@ -27,7 +31,9 @@ class Loss:
             return -np.sum(y*np.log(y_hat))/y.shape[0]
         def accuracy(self, y_hat, y):
             return np.sum(np.argmax(y_hat, axis=1) == np.argmax(y, axis=1))/y.shape[0]
-    class BinaryCrossEntropy:
+        def evaluation(self, y_hat, y):
+            return f"Cost: {self.cost(y_hat, y)}; Accuracy: {self.accuracy(y_hat, y)}"
+    class Binary_Cross_Entropy:
         def loss(self, y_hat, y):
             return -np.sum(y * np.log(y_hat) + (1 - y) * np.log(1 - y_hat))
         def derivative(self, y_hat, y):
@@ -36,6 +42,13 @@ class Loss:
             return -np.sum(y * np.log(y_hat) + (1 - y) * np.log(1 - y_hat))
         def accuracy(self, y_hat, y):
             return np.sum(y_hat == y)/y.shape[0]
+        def evaluation(self, y_hat, y):
+            return f"Cost: {self.cost(y_hat, y)}; Accuracy: {self.accuracy(y_hat, y)}"
+        
+    MAE = Mean_Absolute_Error()
+    MSE = Mean_Squared_Error()
+    CrossEntropy = Cross_Entropy()
+    BinaryCrossEntropy = Binary_Cross_Entropy()
 
 #Input Layer
 class Input:
@@ -199,11 +212,9 @@ class Model:
             e = self.loss.derivative(y_hat, y)/batch_size
             self.output.back_propagation(e, self.learning_rate)
 
-            if (iter + 1)% 50 == 0:
-                y_hat = self.predict(x_train)
-                s = 'iter:' + str(iter+1) + ', cost:' + str(self.loss.cost(y_hat, y_train))
-                if type(self.loss).__name__ == type(Loss.CrossEntropy()).__name__:
-                    s += ', accuracy:' + str(self.loss.accuracy(y_hat, y_train))
+            if (iter + 1) % 50 == 0:
+                y_predict = self.predict(x_train)
+                s = 'iter:' + str(iter+1) + self.loss.evaluation(y_predict, y_train)
 
                 print(s)
             
