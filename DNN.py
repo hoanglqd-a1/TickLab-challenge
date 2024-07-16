@@ -1,7 +1,4 @@
 import numpy as np
-import os
-
-os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 
 class Loss:
     class Mean_Absolute_Error:
@@ -201,7 +198,7 @@ class Model:
             batch_size = n_samples
 
         for iter in range(iters):
-            indices = np.random.permutation(np.arange(n_samples))[:batch_size]
+            indices = np.random.permutation(np.arange(n_samples))[:batch_size].astype('int32')
             x_batch = x_train[indices]
             y_batch = y_train[indices]
 
@@ -228,10 +225,43 @@ class Model:
     
     def evaluate(self, X_test, Y_test):
         y_hat = self.predict(X_test)
-        self.loss.evaluate(y_hat, Y_test)
+        print(self.loss.evaluation(y_hat, Y_test))
 
 def processing(Y, n):
     y = np.zeros((Y.shape[0], n))
     for i in range(Y.shape[0]):
         y[i, int(Y[i])] = 1
     return y
+
+"""def main():
+    import tensorflow as tf
+    from tensorflow.keras.datasets import mnist
+    import os 
+    from time import time
+    os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
+
+    (x_train, y_train), (x_test, y_test) = mnist.load_data()
+    x_train = x_train.reshape(-1, 28*28).astype("float32") / 255.0
+    x_test  = x_test.reshape(-1, 28*28).astype('float32') / 255.0
+    x_train = tf.convert_to_tensor(x_train)
+    x_test = tf.convert_to_tensor(x_test)
+    x_train = (x_train.numpy())
+    x_test = (x_test.numpy())
+
+    y_train = processing(y_train, 10)
+    y_test = processing(y_test, 10)
+
+    input = Input(shape=28*28)
+    layer = Layer(shape=256, activation='ReLU', previous_layer=input)
+    output = Layer(shape=10, activation='softmax', previous_layer=layer)
+    model = Model(input=input, output=output)
+    model.compile(loss=Loss.CrossEntropy, learning_rate=0.001)
+
+    start = time()
+    model.fit(x_train, y_train, batch_size=32, iters=4000)
+    model.evaluate(x_test, y_test)
+    end = time()
+    print(end-start)
+
+if __name__ == '__main__':
+    main()"""
