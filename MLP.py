@@ -43,10 +43,11 @@ class Layer:
         self.activation = activation
         self.previous_layer = previous_layer
         previous_layer.next_layer = self
-        self.w = np.random.rand(shape, self.previous_layer.shape)
-        self.b = np.random.rand(shape)
-        self.derivative_w = np.zeros(shape=[shape, self.previous_layer.shape])
-        self.derivative_b = np.zeros(shape=shape)
+
+        self.w = np.random.rand(shape, self.previous_layer.shape) * np.sqrt(2/self.previous_layer.shape)
+        self.b = np.random.rand(shape) * np.sqrt(2/self.previous_layer.shape)
+        self.derivative_w = np.zeros(shape=self.w.shape)
+        self.derivative_b = np.zeros(shape=self.b.shape)
         self.params = shape * self.previous_layer.shape
     def activate(self):
         if self.activation == 'ReLU':
@@ -55,7 +56,7 @@ class Layer:
             self.a = 1/(1 + np.exp(-self.z))
         elif self.activation == 'tanh':
             self.a = np.tanh(self.z)
-        elif self.activation == 'softmax':
+        elif self.activation == 'softmax':  
             if self.z.ndim == 1:
                 self.z = np.array([self.z])
             z = (self.z.T - np.max(self.z, axis=1)).T
@@ -91,33 +92,29 @@ class Layer:
         return derivative
     def feed_forward(self):
         self.batch_size = self.previous_layer.batch_size
-        self.z = np.dot(self.w, self.previous_layer.a.T).T
-        self.z = self.z + self.b
+        self.z = np.dot(self.w, self.previous_layer.a.T).T + self.b
         self.activate()
         if self.next_layer != None:
             self.next_layer.feed_forward()
     def back_propagation(self, e):
         derivative = self.derivative_of_activation()
-        #print('d_acti:', derivative[0], e[0])
         if self.activation == 'softmax':
             pass
         else:
             e = e * derivative
-        #print(e[0])
         for i in range(e.shape[0]):
             self.derivative_w += np.outer(e[i], self.previous_layer.a[i])
 
         self.derivative_b = np.sum(e, axis=0)
 
-        #next layer call back propagation
         e = np.dot(self.w.T, e.T).T
 
         #previous layer call back propagation
         self.previous_layer.back_propagation(e)
     def update_parameter(self, learning_rate):
         #update W and b
-        self.w = self.w - learning_rate * self.derivative_w / self.batch_size
-        self.b = self.b - learning_rate * self.derivative_b / self.batch_size
+        self.w -= learning_rate * self.derivative_w / self.batch_size
+        self.b -= learning_rate * self.derivative_b / self.batch_size
 
         #set derivative to zero
         self.derivative_w = np.zeros(shape=self.derivative_w.shape)
@@ -125,7 +122,6 @@ class Layer:
         
         self.previous_layer.update_parameter(learning_rate)
     
-
 class Model:
     input = None
     output = None
@@ -169,6 +165,10 @@ class Model:
             high = min(low + batch_size, n_samples)
             x_batch = x_train[low:high]
             y_batch = y_train[low:high]
+
+            if high - low == 1:
+                x_batch = np.expand_dims(x_batch, axis=0)
+                y_batch = np.expand_dims(y_batch, axis=0)
 
             self.input.load_input(x_batch)
             self.input.feed_forward()
@@ -240,12 +240,13 @@ def main():
 
     input = Input(shape=28*28)
     layer = Layer(shape=256, activation='ReLU', previous_layer=input)
+    layer = Layer(shape=64 , activation='ReLU', previous_layer=layer)
     output = Layer(shape=10, activation='softmax', previous_layer=layer)
     model = Model(input=input, output=output)
-    model.compile(loss=Loss.CrossEntropy, learning_rate=0.05)
+    model.compile(loss=Loss.CrossEntropy, learning_rate=0.001)
 
     start = time()
-    model.fit(x_train, y_train, batch_size=32, epochs=7)
+    model.fit(x_train, y_train, batch_size=32, epochs=20)
     model.evaluate(x_test, y_test)
     end = time()
     print(end-start)
