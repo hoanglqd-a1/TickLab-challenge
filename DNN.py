@@ -1,152 +1,54 @@
 import numpy as np
-import Loss
+from time import time
+
+import Loss, Layer, Optimizers
 
 #Input Layer
 class Input:
     a = None
     shape = None
+
     next_layer = None
-    previous_layer = None
+
     params = 0
     batch_size = None
     def __init__(self, shape):
         self.shape = shape
     def load_input(self, input):
         self.a = input
-        self.batch_size = input.shape[0]
     def feed_forward(self):
+        if type(self.next_layer).__name__ == type(Layer.Conv2D).__name__ and self.a.ndim == 3:
+            self.a = np.expand_dims(self.a, axis=3)
+
+        self.batch_size = self.a.shape[0]
         self.next_layer.feed_forward()
     def back_propagation(self, *argv):
         return
-    def update_parameter(self, *argv):
-        return
-
-class Layer:
-    z = None
-    w = None
-    b = None
-    a = None
-    #activation function
-    activation = None
-    shape = None
-    previous_layer = None
-    next_layer = None
-
-    #partial derivative of loss function to W and b
-    derivative_w = None
-    derivative_b = None
-
-    params = None
-    batch_size = None
-    def __init__(self, shape, activation, previous_layer):
-        self.shape = shape
-        self.activation = activation
-        self.previous_layer = previous_layer
-        previous_layer.next_layer = self
-        self.w = np.random.rand(shape, self.previous_layer.shape)
-        self.b = np.random.rand(shape)
-        self.derivative_w = np.zeros(shape=[shape, self.previous_layer.shape])
-        self.derivative_b = np.zeros(shape=shape)
-        self.params = shape * self.previous_layer.shape
-    def activate(self):
-        if self.activation == 'ReLU':
-            self.a = np.maximum(0, self.z)
-        elif self.activation == 'sigmoid':
-            self.a = 1/(1 + np.exp(-self.z))
-        elif self.activation == 'tanh':
-            self.a = np.tanh(self.z)
-        elif self.activation == 'softmax':
-            if self.z.ndim == 1:
-                self.z = np.array([self.z])
-            z = (self.z.T - np.max(self.z, axis=1)).T
-            self.a = (np.exp(z).T / np.sum(np.exp(z), axis=1)).T
-            self.a = np.maximum(self.a, 1e-6)
-        elif self.activation == 'LeakyReLU':
-            self.a = np.maximum(self.z/10, self.z)
-        elif self.activation == 'linear':
-            self.a = self.z
-        else:
-            raise ValueError('Invalid activation function')
-
-    #compute derivative of activation function
-    def derivative_of_activation(self):
-        derivative = None
-        if self.activation == 'ReLU':
-            derivative = np.where(self.z > 0, 1, 0)
-        elif self.activation == 'sigmoid':
-            derivative = self.a * (1 - self.a)
-        elif self.activation == 'tanh':
-            derivative = 1 - self.a**2
-        elif self.activation == 'softmax':
-            derivative = np.zeros(shape=([self.a.shape[0], self.a.shape[1], self.a.shape[1]]))
-            for i in range(self.a.shape[0]):
-                derivative[i] = np.diagflat(self.a[i]) - np.outer(self.a[i], self.a[i])
-        elif self.activation == 'LeakyReLU':
-            derivative = np.where(self.z > 0, 1, 0.1)
-        elif self.activation == 'linear':
-            derivative = np.ones(shape=self.shape)
-        else:
-            raise ValueError('Invalid activation function')
-
-        return derivative
-    def feed_forward(self):
-        self.batch_size = self.previous_layer.batch_size
-        self.z = np.dot(self.w, self.previous_layer.a.T).T
-        self.z = self.z + self.b
-        self.activate()
-        if self.next_layer != None:
-            self.next_layer.feed_forward()
-    def back_propagation(self, e):
-        derivative = self.derivative_of_activation()
-        #print('d_acti:', derivative[0], e[0])
-        if self.activation == 'softmax':
-            pass
-        else:
-            e = e * derivative
-        #print(e[0])
-        for i in range(e.shape[0]):
-            self.derivative_w += np.outer(e[i], self.previous_layer.a[i])
-
-        self.derivative_b = np.sum(e, axis=0)
-
-        #next layer call back propagation
-        e = np.dot(self.w.T, e.T).T
-
-        #previous layer call back propagation
-        self.previous_layer.back_propagation(e)
-    def update_parameter(self, learning_rate):
-        #update W and b
-        self.w = self.w - learning_rate * self.derivative_w / self.batch_size
-        self.b = self.b - learning_rate * self.derivative_b / self.batch_size
-
-        #set derivative to zero
-        self.derivative_w = np.zeros(shape=self.derivative_w.shape)
-        self.derivative_b = np.zeros(shape=self.derivative_b.shape)
-        
-        self.previous_layer.update_parameter(learning_rate)
-    
 
 class Model:
     input = None
     output = None
     loss = None
-    learning_rate = None
     total_parameters = 0
     #add input and output layer
     def __init__(self, input, output):
         self.input = input
         self.output = output
-        self.get_model_parameters()
-    def get_model_parameters(self):
+        self.__get_model_parameters()
+    def __get_model_parameters(self):
         layer = self.input
         while layer:
             self.total_parameters += layer.params
             layer = layer.next_layer
         
     #add loss function and learning rate
-    def compile(self, loss, learning_rate):
+    def compile(self, loss, optimizer):
         self.loss = loss
-        self.learning_rate = learning_rate
+        self.optimizer = optimizer
+        layer = self.input
+        while layer:
+            layer.optimizer = optimizer.__copy__()
+            layer = layer.next_layer
 
     #train the model
     def fit(self, x_train, y_train, batch_size=None, epochs=None, iters=100, verbose=1):
@@ -170,6 +72,10 @@ class Model:
             x_batch = x_train[low:high]
             y_batch = y_train[low:high]
 
+            if high - low == 1:
+                x_batch = np.expand_dims(x_batch, axis=0)
+                y_batch = np.expand_dims(y_batch, axis=0)
+
             self.input.load_input(x_batch)
             self.input.feed_forward()
             y_hat = self.output.a
@@ -179,7 +85,7 @@ class Model:
 
             if verbose == 1:
                 if epochs is None:
-                    if (iter + 1) % 50 == 0:
+                    if (iter + 1) % 1 == 0:
                         y_predict = self.predict(x_train)
                         s = 'iter: ' + str(iter+1) + ' ' + self.loss.evaluation(y_predict, y_train)
 
@@ -193,8 +99,6 @@ class Model:
             
             elif verbose == 0:
                 pass
-
-            self.output.update_parameter(self.learning_rate)
 
     def predict(self, X_test):
         self.input.load_input(X_test)
@@ -222,33 +126,44 @@ def processing(Y, n):
 
 def main():
     import tensorflow as tf
-    from tensorflow.keras.datasets import mnist
+    from tensorflow.keras.datasets import cifar10
     import os 
     from time import time
     os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 
-    (x_train, y_train), (x_test, y_test) = mnist.load_data()
-    x_train = x_train.reshape(-1, 28*28).astype("float32") / 255.0
-    x_test  = x_test.reshape(-1, 28*28).astype('float32') / 255.0
+    (x_train, y_train), (x_test, y_test) = cifar10.load_data()
+    x_train = x_train.astype("float64") / 255.0
+    x_test  = x_test.astype('float64') / 255.0
     x_train = tf.convert_to_tensor(x_train)
     x_test = tf.convert_to_tensor(x_test)
-    x_train = x_train.numpy()
-    x_test  = x_test.numpy()
+    x_train = (x_train.numpy())
+    x_test = (x_test.numpy())
 
+    y_train = y_train.reshape(-1)
+    y_test  = y_test.reshape(-1)
     y_train = processing(y_train, 10)
-    y_test = processing(y_test, 10)
+    y_test  = processing(y_test , 10)
 
-    input = Input(shape=28*28)
-    layer = Layer(shape=256, activation='ReLU', previous_layer=input)
-    output = Layer(shape=10, activation='softmax', previous_layer=layer)
+    x_train = x_train[:1000]
+    x_test  = x_test[:50]
+    y_train = y_train[:1000]
+    y_test  = y_test[:50]
+
+    input = Input(shape=(32, 32, 3))
+    conv2d1 = Layer.Conv2D(filters=16, kernel_size=3, padding=1, activation='LeakyReLU', prev_layer=input)
+    maxpooling1 = Layer.MaxPool2D(pool_size=2, prev_layer=conv2d1)
+    conv2d2 = Layer.Conv2D(filters=32, kernel_size=3, padding=1, activation='LeakyReLU', prev_layer=maxpooling1)
+    maxpooling2 = Layer.MaxPool2D(pool_size=2, prev_layer=conv2d2)
+    flatten = Layer.Flatten(prev_layer=maxpooling2)
+    layer1 = Layer.Layer(shape=64, activation='LeakyReLU', prev_layer=flatten)
+    output = Layer.Layer(shape=10, activation='softmax', prev_layer=layer1)
     model = Model(input=input, output=output)
-    model.compile(loss=Loss.CrossEntropy, learning_rate=0.05)
+    model.compile(loss=Loss.CrossEntropy, optimizer=Optimizers.SGD(learning_rate=0.001, momentum=0.8))
 
     start = time()
-    model.fit(x_train, y_train, batch_size=32, epochs=7)
-    model.evaluate(x_test, y_test)
-    end = time()
-    print(end-start)
+    model.fit(x_train=x_train, y_train=y_train, batch_size=8, epochs=50)
+    end   = time()
+    print(end - start)
 
 if __name__ == '__main__':
-    main()
+    main()  
