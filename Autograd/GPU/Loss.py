@@ -1,4 +1,4 @@
-import autograd as ag
+import cupyautograd as ag
 import numpy as np
 
 class Mean_Absolute_Error:

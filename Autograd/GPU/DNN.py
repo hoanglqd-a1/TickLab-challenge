@@ -1,4 +1,4 @@
-import autograd as ag
+import cupyautograd as ag
 import numpy as np
 from time import time
 
