@@ -17,7 +17,7 @@ class Input:
     def load_input(self, input):
         self.a = input
     def feed_forward(self):
-        if type(self.next_layer).__name__ == type(Layer.Conv2D).__name__ and self.a.ndim == 3:
+        if isinstance(self.next_layer, Layer.Conv2D) and self.a.ndim == 3:
             self.a = np.expand_dims(self.a, axis=3)
 
         self.batch_size = self.a.shape[0]
@@ -51,7 +51,7 @@ class Model:
             layer = layer.next_layer
 
     #train the model
-    def fit(self, x_train, y_train, batch_size=None, epochs=None, iters=100, verbose=1):
+    def fit(self, x_train, y_train, x_validate=None, y_validate=None, batch_size=None, epochs=None, iters=100, verbose=1):
         n_samples = x_train.shape[0]
         if batch_size == None:
             batch_size = n_samples
@@ -61,6 +61,7 @@ class Model:
         if epochs is not None:
             iters = epochs * batch_num
 
+        start = time()
         for iter in range(iters):
             if iter % batch_num == 0:
                 indices = np.random.permutation(np.arange(n_samples)).astype('int32')
@@ -71,10 +72,6 @@ class Model:
             high = min(low + batch_size, n_samples)
             x_batch = x_train[low:high]
             y_batch = y_train[low:high]
-
-            if high - low == 1:
-                x_batch = np.expand_dims(x_batch, axis=0)
-                y_batch = np.expand_dims(y_batch, axis=0)
 
             self.input.load_input(x_batch)
             self.input.feed_forward()
@@ -87,23 +84,41 @@ class Model:
                 if epochs is None:
                     if (iter + 1) % 1 == 0:
                         y_predict = self.predict(x_train)
-                        s = 'iter: ' + str(iter+1) + ' ' + self.loss.evaluation(y_predict, y_train)
-
-                        print(s)
+                        print(f'Iter: {iter}')
+                        out = "training: " + self.loss.evaluation(y_predict, y_train)
+                        if x_validate is not None:
+                            y_predict = self.predict(x_validate)
+                            out += "validation: " + self.loss.evaluation(y_predict, y_validate)
+                        print(out)
+                        print('time:',time() - start)
+                        start = time()
                 else:
                     if (iter + 1) % batch_num == 0:
                         y_predict = self.predict(x_train)
-                        s = 'epoch: ' + str(int((iter + 1) / batch_num)) + ' ' + self.loss.evaluation(y_predict, y_train)
-
-                        print(s)
+                        print(f'Epoch: {(iter + 1)//batch_num}')
+                        out = "Training. " + self.loss.evaluation(y_predict, y_train)
+                        if x_validate is not None:
+                            y_predict = self.predict(x_validate)
+                            out += "; Validation. " + self.loss.evaluation(y_predict, y_validate)
+                        print(out)
+                        print('time:',time() - start)
+                        start = time()
             
             elif verbose == 0:
                 pass
 
-    def predict(self, X_test):
-        self.input.load_input(X_test)
-        self.input.feed_forward()
-        y_hat = self.output.a
+    def predict(self, X_test, batch_size=None):
+        if batch_size == None:
+            batch_size = min(258, X_test.shape[0])
+        y_hat = np.zeros(shape=[X_test.shape[0], self.output.shape])
+        for i in range(0, X_test.shape[0], batch_size):
+            end = min(i + batch_size, X_test.shape[0])
+            x_batch = X_test[i:end]
+            if end - i == 1:
+                x_batch = np.expand_dims(x_batch, axis=0)
+            self.input.load_input(x_batch)
+            self.input.feed_forward()
+            y_hat[i:end] = self.output.a
         return y_hat
     
     def evaluate(self, X_test, Y_test, verbose=1):
@@ -144,10 +159,10 @@ def main():
     y_train = processing(y_train, 10)
     y_test  = processing(y_test , 10)
 
-    x_train = x_train[:1000]
-    x_test  = x_test[:50]
-    y_train = y_train[:1000]
-    y_test  = y_test[:50]
+    x_validate = x_test[:5000]
+    y_validate = y_test[:5000]
+    x_test = x_test[5000:]
+    y_test = y_test[5000:]
 
     input = Input(shape=(32, 32, 3))
     conv2d1 = Layer.Conv2D(filters=16, kernel_size=3, padding=1, activation='LeakyReLU', prev_layer=input)
@@ -158,12 +173,9 @@ def main():
     layer1 = Layer.Layer(shape=64, activation='LeakyReLU', prev_layer=flatten)
     output = Layer.Layer(shape=10, activation='softmax', prev_layer=layer1)
     model = Model(input=input, output=output)
-    model.compile(loss=Loss.CrossEntropy, optimizer=Optimizers.SGD(learning_rate=0.001, momentum=0.8))
-
-    start = time()
-    model.fit(x_train=x_train, y_train=y_train, batch_size=8, epochs=50)
-    end   = time()
-    print(end - start)
+    model.compile(loss=Loss.CrossEntropy, optimizer=Optimizers.Adam(learning_rate=0.05))
+    model.fit(x_train, y_train, x_validate, y_validate, batch_size=32, epochs=5)
+    model.evaluate(x_test, y_test)
 
 if __name__ == '__main__':
     main()  
